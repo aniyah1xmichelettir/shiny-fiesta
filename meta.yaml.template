@@ -1,0 +1,75 @@
+{% set name = "jupyter_server_terminals" %}
+{% set version = "0.4.4" %}
+# there is a test dependency on jupyter_server, but jupyter_server has
+# a runtime dependency on this package. Build first with true, then
+# after jupyter_server is available bump build number and rebuild with false.
+{% set break_cycle = false %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: 57ab779797c25a7ba68e97bcfb5d7740f2b5e8a83b5e8102b10438041a7eac5d
+
+build:
+  script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
+  number: 1
+  # This package has a test dependency on jupyter_server, but that is
+  # unavailable on s390x because of rust toolchain issues.
+  skip: true # [py<38 or s390x]
+
+requirements:
+  host:
+    - hatchling >=1.5
+    - pip
+    - python
+    - wheel
+  run:
+    - python
+    - terminado >=0.8.3
+    - pywinpty >=2.0.10  # [win]
+
+{% set suppressed_tests = "" %}
+{% set min_cov = 80 %}
+
+# Some tests fail in CI, apparently due to quirks around running from cygwin, not from pwsh or cmd
+{% set suppressed_tests = "-k \"not (test_authorized_requests or test_terminal_create or test_terminal_create_with_kwargs or test_terminal_create_with_cwd)\"" %}  # [win]
+{% set min_cov = 50 %}  # [win]
+
+{% if break_cycle %}
+test:
+{% else %}
+test:
+  source_files:
+    - tests
+  imports:
+    - jupyter_server_terminals  # needs juypyter_server
+  commands:
+    - pip check
+    - pytest -vv {{ suppressed_tests }} --cov=jupyter_server_terminals --cov-report=term-missing:skip-covered --no-cov-on-fail --cov-fail-under={{ min_cov }}
+  requires:
+    - jupyter_server >=2.0.0rc8
+    - m2-bash  # [win]
+    - pip
+    - posix  # [win]
+    - pytest >=7.0
+    - pytest-cov
+    - pytest-jupyter-server >=0.5.3
+    - pytest-timeout
+{% endif %}
+
+about:
+  home: https://github.com/jupyter-server/jupyter_server_terminals
+  summary: A Jupyter Server Extension Providing Terminals.
+  license: BSD-3-Clause
+  license_file: LICENSE
+  license_family: BSD
+  description: Jupyter Server Terminals is a Jupyter Server Extension providing support for terminals.
+  doc_url: https://github.com/jupyter-server/jupyter_server_terminals#readme
+  dev_url: https://github.com/jupyter-server/jupyter_server_terminals
+
+extra:
+  recipe-maintainers:
+    - conda-forge/jupyter_server
